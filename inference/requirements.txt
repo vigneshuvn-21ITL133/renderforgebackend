@@ -1,0 +1,29 @@
+# --- Web server ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# --- ML / inference ---
+# torch: install the CUDA build matching your driver from https://pytorch.org/get-started/locally/
+# e.g. pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+torch==2.3.1
+torchvision==0.18.1
+numpy==1.26.4
+Pillow==10.4.0
+rembg==2.0.59
+onnxruntime==1.19.2   # CPU rembg backend; swap for onnxruntime-gpu if desired
+trimesh==4.4.9
+scipy>=1.11            # required by trimesh mesh cleanup (fix_normals, merge_vertices)
+fast-simplification==0.1.7   # enables mesh.simplify_quadric_decimation
+
+# --- TripoSR itself is not on PyPI — install from source ---
+# git clone https://github.com/VAST-AI-Research/TripoSR
+# pip install -e TripoSR
+
+# --- Optional second engine: Hunyuan3D-2mini (RF_ENGINE=hunyuan3d_mini) ---
+# git clone https://github.com/Tencent/Hunyuan3D-2
+# pip install -r Hunyuan3D-2/requirements.txt
+# pip install -e Hunyuan3D-2          # provides the `hy3dgen` package
+# Weights (tencent/Hunyuan3D-2mini) download from Hugging Face on first start.
