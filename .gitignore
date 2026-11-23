@@ -1,0 +1,35 @@
+# Virtual environments
+**/venv/
+**/venv*/
+**/.venv/
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets and environment files
+.env
+.env.*
+.env.example
+
+# Local data and generated outputs
+**/data/
+**/uploads/
+**/outputs/
+
+# Downloaded model weights (if you don't intend to commit them)
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
