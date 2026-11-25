@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
@@ -34,6 +34,7 @@ def create_app(settings: Settings | None = None, inference: InferenceClient | No
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if settings.create_tables_on_startup:
             await database.create_all()
+        await database.fail_interrupted_generations()
         yield
         await database.dispose()
 
@@ -56,6 +57,14 @@ def create_app(settings: Settings | None = None, inference: InferenceClient | No
 
     @app.get("/health")
     async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/health/db")
+    async def health_db() -> dict[str, str]:
+        try:
+            await database.check()
+        except Exception as exc:  # any driver error means "not ready"
+            raise HTTPException(503, "Database unreachable") from exc
         return {"status": "ok"}
 
     return app
