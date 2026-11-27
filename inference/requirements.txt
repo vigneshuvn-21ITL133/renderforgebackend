@@ -16,6 +16,7 @@ rembg==2.0.59
 onnxruntime==1.19.2   # CPU rembg backend; swap for onnxruntime-gpu if desired
 trimesh==4.4.9
 scipy>=1.11            # required by trimesh mesh cleanup (fix_normals, merge_vertices)
+scikit-image>=0.22   # marching cubes fallback (torchmcubes.py) so Windows needs no compiler
 fast-simplification==0.1.7   # enables mesh.simplify_quadric_decimation
 
 # --- TripoSR itself is not on PyPI — install from source ---
