@@ -16,7 +16,12 @@ from app.services.storage import LocalStorage
 
 def create_app(settings: Settings | None = None, inference: InferenceClient | None = None) -> FastAPI:
     settings = settings or get_settings()
-    database = Database(settings.database_url)
+    database = Database(
+        settings.database_url,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_recycle_seconds=settings.db_pool_recycle_seconds,
+    )
     storage = LocalStorage(settings.storage_dir)
     inference = inference or InferenceClient(
         base_url=settings.inference_base_url,

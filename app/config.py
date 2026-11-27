@@ -16,6 +16,10 @@ class Settings(BaseSettings):
         description="Create tables from the models at startup. Replace with Alembic migrations before production.",
     )
 
+    db_pool_size: int = Field(default=5, ge=1)
+    db_max_overflow: int = Field(default=5, ge=0)
+    db_pool_recycle_seconds: int = Field(default=240, ge=30, description="Keep below Neon's idle-connection timeout")
+
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=30, ge=1)

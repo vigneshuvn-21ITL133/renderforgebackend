@@ -38,7 +38,7 @@ class InferenceClient:
         return httpx.AsyncClient(
             base_url=self._base_url,
             headers=self._headers,
-            timeout=self._timeout,
+            timeout=httpx.Timeout(self._timeout, connect=10.0),
             transport=self._transport,
         )
 

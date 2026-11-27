@@ -102,4 +102,6 @@ async def download_generation(
         path,
         media_type=MESH_MEDIA_TYPES[fmt],
         filename=f"renderforge-{generation.id}.{fmt}",
+        # A finished mesh never changes, so the browser can reuse it when a history item is reopened.
+        headers={"Cache-Control": "private, max-age=86400"},
     )

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.models import Generation, GenerationStatus
 from app.schemas import OutputFormat, Quality
 from app.services.inference_client import InferenceClient, InferenceError
-from app.services.storage import LocalStorage
+from app.services.storage import Storage
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class GenerationService:
         self,
         sessionmaker: async_sessionmaker[AsyncSession],
         inference: InferenceClient,
-        storage: LocalStorage,
+        storage: Storage,
         max_concurrent: int = 1,
     ) -> None:
         self._sessionmaker = sessionmaker
@@ -62,47 +62,51 @@ class GenerationService:
         await session.flush()  # assigns generation.id
 
         generation.input_key = f"inputs/{generation.id}.{extension}"
-        self._storage.write(generation.input_key, image)
+        await self._storage.write(generation.input_key, image)
         await session.commit()
         return generation
 
     async def process(self, generation_id: uuid.UUID) -> None:
-        """Background task. It always leaves the row in ``completed`` or ``failed``, never ``processing``."""
-        async with self._sessionmaker() as session:
-            generation = await session.get(Generation, generation_id)
-            if generation is None or generation.status is not GenerationStatus.PENDING:
-                return
+        """Background task. It always leaves the row in ``completed`` or ``failed``, never ``processing``.
 
-            generation.status = GenerationStatus.PROCESSING
-            await session.commit()
+        The job waits for a free GPU slot first, so it stays ``pending`` while queued and only
+        becomes ``processing`` when the GPU actually starts on it.
+        """
+        async with self._gpu_slots:
+            async with self._sessionmaker() as session:
+                generation = await session.get(Generation, generation_id)
+                if generation is None or generation.status is not GenerationStatus.PENDING:
+                    return
 
-            try:
-                await self._run(generation)
-            except Exception as exc:
-                logger.exception("Generation %s failed", generation.id)
-                generation.status = GenerationStatus.FAILED
-                generation.error_message = _describe_failure(exc)
-            finally:
-                if generation.input_key:
-                    self._storage.delete(generation.input_key)
+                generation.status = GenerationStatus.PROCESSING
+                await session.commit()
 
-            await session.commit()
+                try:
+                    await self._run(generation)
+                except Exception as exc:
+                    logger.exception("Generation %s failed", generation.id)
+                    generation.status = GenerationStatus.FAILED
+                    generation.error_message = _describe_failure(exc)
+                finally:
+                    if generation.input_key:
+                        await self._storage.delete(generation.input_key)
+
+                await session.commit()
 
     async def _run(self, generation: Generation) -> None:
         extension = Path(generation.input_key).suffix.lstrip(".")
-        image = self._storage.read(generation.input_key)
+        image = await self._storage.read(generation.input_key)
 
-        async with self._gpu_slots:
-            payload = await self._inference.generate_mesh(
-                image=image,
-                filename=f"{generation.id}.{extension}",
-                content_type=IMAGE_CONTENT_TYPES[extension],
-                quality=generation.quality,
-                output_format=generation.output_format,
-            )
+        payload = await self._inference.generate_mesh(
+            image=image,
+            filename=f"{generation.id}.{extension}",
+            content_type=IMAGE_CONTENT_TYPES[extension],
+            quality=generation.quality,
+            output_format=generation.output_format,
+        )
 
         output_key = f"meshes/{generation.id}.{generation.output_format}"
-        self._storage.write(output_key, payload.mesh)
+        await self._storage.write(output_key, payload.mesh)
 
         generation.output_key = output_key
         generation.vertex_count = payload.vertex_count

@@ -51,12 +51,14 @@ def prepare_database_url(url: str) -> tuple[str, dict[str, Any]]:
 
 
 class Database:
-    def __init__(self, url: str) -> None:
+    def __init__(
+        self, url: str, *, pool_size: int = 5, max_overflow: int = 5, pool_recycle_seconds: int = 240
+    ) -> None:
         sa_url, connect_args = prepare_database_url(url)
         kwargs: dict[str, Any] = {"pool_pre_ping": True}
         if sa_url.startswith(("postgresql", "postgres")):
             # Neon suspends idle compute and drops idle connections, so recycle before that happens.
-            kwargs.update(pool_recycle=240, pool_size=5, max_overflow=5)
+            kwargs.update(pool_recycle=pool_recycle_seconds, pool_size=pool_size, max_overflow=max_overflow)
             connect_args.setdefault("timeout", 30)  # first connect can wake a suspended compute
         self.engine: AsyncEngine = create_async_engine(sa_url, connect_args=connect_args, **kwargs)
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)

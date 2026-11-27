@@ -13,11 +13,11 @@ from app.models import User
 from app.schemas import RefreshRequest, SignupRequest, TokenPair, UserOut
 from app.security import (
     InvalidTokenError,
-    burn_password_check,
+    burn_password_check_async,
     create_token,
     decode_token,
-    hash_password,
-    verify_password,
+    hash_password_async,
+    verify_password_async,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -43,7 +43,7 @@ async def signup(body: SignupRequest, session: SessionDep, settings: SettingsDep
     email = body.email.lower()
     user = User(
         email=email,
-        hashed_password=hash_password(body.password),
+        hashed_password=await hash_password_async(body.password),
         full_name=body.full_name,
     )
     session.add(user)
@@ -64,9 +64,9 @@ async def login(
 ) -> TokenPair:
     user = await session.scalar(select(User).where(User.email == form.username.lower()))
     if user is None:
-        burn_password_check(form.password)
+        await burn_password_check_async(form.password)
         raise _invalid_credentials()
-    if not verify_password(form.password, user.hashed_password):
+    if not await verify_password_async(form.password, user.hashed_password):
         raise _invalid_credentials()
     if not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is disabled")
