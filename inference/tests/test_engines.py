@@ -21,3 +21,14 @@ def test_new_triposr_gets_vertex_colors():
 
 def test_old_triposr_still_works():
     assert _extract_mesh(OldTSR(), object(), 128) == ("mesh", None, 128)
+
+
+def test_marching_cubes_threshold_is_passed_when_supported(monkeypatch):
+    from app import engines
+
+    class WithThreshold:
+        def extract_mesh(self, scene_codes, has_vertex_color, resolution=256, threshold=25.0):
+            return [threshold]
+
+    monkeypatch.setattr(engines.settings, "MC_THRESHOLD", 12.5)
+    assert engines._extract_mesh(WithThreshold(), object(), 256) == 12.5

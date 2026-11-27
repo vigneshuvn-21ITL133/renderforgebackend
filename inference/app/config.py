@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     ENABLE_MESH_CLEANUP: bool = True
     ENABLE_DECIMATION: bool = True
     DECIMATION_TARGET_FACES: int = 20000  # cap output complexity for web/AR use
+    SMOOTH_ITERATIONS: int = 10           # Taubin smoothing passes against marching-cubes bumps; 0 turns it off
+    MIN_COMPONENT_RATIO: float = 0.03     # drop floating pieces smaller than this share of the largest piece
+    MC_THRESHOLD: float = 25.0            # TripoSR iso-surface level. Lower = thicker/fuller shape, higher = thinner
+    REMBG_MODEL: str = "u2net"            # "isnet-general-use" gives cleaner edges on many objects
 
     # --- Storage (local scratch; permanent storage handled upstream by Django/R2) ---
     OUTPUT_DIR: Path = Path("/tmp/renderforge/outputs")

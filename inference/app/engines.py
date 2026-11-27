@@ -41,7 +41,7 @@ def _rembg_session():
     if _session is None:
         import rembg
 
-        _session = rembg.new_session()
+        _session = rembg.new_session(settings.REMBG_MODEL)
     return _session
 
 
@@ -62,8 +62,11 @@ def _extract_mesh(model, scene_codes, resolution: int) -> trimesh.Trimesh:
     Vertex colours are what GLB output relies on, so ask for them when supported.
     """
     kwargs: dict = {"resolution": resolution}
-    if "has_vertex_color" in inspect.signature(model.extract_mesh).parameters:
+    accepted = inspect.signature(model.extract_mesh).parameters
+    if "has_vertex_color" in accepted:
         kwargs["has_vertex_color"] = True
+    if "threshold" in accepted:
+        kwargs["threshold"] = settings.MC_THRESHOLD
     return model.extract_mesh(scene_codes, **kwargs)[0]
 
 

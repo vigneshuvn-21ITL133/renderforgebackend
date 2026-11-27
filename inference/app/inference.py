@@ -9,6 +9,7 @@ Hunyuan3D-2mini). This module only does the shared mesh cleanup and export.
 """
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -16,9 +17,12 @@ from pathlib import Path
 
 import trimesh
 from PIL import Image
+from scipy.spatial import cKDTree
 
 from app.config import settings
 from app.schemas import InferParams
+
+logger = logging.getLogger("renderforge.inference")
 
 
 @dataclass
@@ -43,15 +47,47 @@ def _cleanup_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return mesh
 
 
+def _remove_small_components(mesh: trimesh.Trimesh, min_ratio: float) -> trimesh.Trimesh:
+    """Drop floating specks: keep pieces with at least ``min_ratio`` of the largest piece's faces."""
+    if min_ratio <= 0 or len(mesh.faces) == 0:
+        return mesh
+    parts = mesh.split(only_watertight=False)
+    if len(parts) <= 1:
+        return mesh
+    largest = max(len(part.faces) for part in parts)
+    kept = [part for part in parts if len(part.faces) >= largest * min_ratio]
+    if len(kept) == len(parts):
+        return mesh
+    logger.info("Removed %d small floating pieces", len(parts) - len(kept))
+    return trimesh.util.concatenate(kept)
+
+
+def _smooth_mesh(mesh: trimesh.Trimesh, iterations: int) -> trimesh.Trimesh:
+    """Taubin smoothing evens out marching-cubes bumps without shrinking the shape. Colours are kept."""
+    if iterations > 0 and len(mesh.faces) > 0:
+        trimesh.smoothing.filter_taubin(mesh, iterations=iterations)
+    return mesh
+
+
 def _decimate_mesh(mesh: trimesh.Trimesh, target_faces: int) -> trimesh.Trimesh:
+    """Reduce to about ``target_faces`` triangles and carry the vertex colours over."""
     if len(mesh.faces) <= target_faces:
         return mesh
     try:
-        return mesh.simplify_quadric_decimation(target_faces)
+        # face_count must be a keyword: the first positional argument is a percentage.
+        simplified = mesh.simplify_quadric_decimation(face_count=target_faces)
     except Exception:
-        # simplify_quadric_decimation requires the `fast-simplification` extra;
-        # degrade gracefully rather than failing the whole job.
+        # Needs the `fast-simplification` package. Keep the full mesh rather than failing the job.
+        logger.warning("Decimation skipped", exc_info=True)
         return mesh
+
+    if mesh.visual.kind == "vertex":
+        # Simplification drops colours, so copy each new vertex's colour from the nearest original vertex.
+        _, nearest = cKDTree(mesh.vertices).query(simplified.vertices)
+        simplified.visual = trimesh.visual.ColorVisuals(
+            simplified, vertex_colors=mesh.visual.vertex_colors[nearest]
+        )
+    return simplified
 
 
 def run_inference(image: Image.Image, params: InferParams) -> InferenceResult:
@@ -65,6 +101,8 @@ def run_inference(image: Image.Image, params: InferParams) -> InferenceResult:
 
     if settings.ENABLE_MESH_CLEANUP:
         mesh = _cleanup_mesh(mesh)
+        mesh = _remove_small_components(mesh, settings.MIN_COMPONENT_RATIO)
+        mesh = _smooth_mesh(mesh, settings.SMOOTH_ITERATIONS)
     if settings.ENABLE_DECIMATION:
         mesh = _decimate_mesh(mesh, settings.DECIMATION_TARGET_FACES)
 
