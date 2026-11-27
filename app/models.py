@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import Boolean, Index, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -66,3 +66,6 @@ class Generation(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="generations")
+
+    # Serves the history list: WHERE user_id = ? ORDER BY created_at DESC
+    __table_args__ = (Index("ix_generations_user_created", "user_id", "created_at"),)
