@@ -12,6 +12,7 @@ Each engine exposes:
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 
@@ -54,6 +55,18 @@ class Engine(ABC):
     def generate(self, image: Image.Image, params: InferParams) -> trimesh.Trimesh: ...
 
 
+def _extract_mesh(model, scene_codes, resolution: int) -> trimesh.Trimesh:
+    """Call ``TSR.extract_mesh`` across TripoSR versions.
+
+    Newer TripoSR requires ``has_vertex_color``; older releases do not have the argument.
+    Vertex colours are what GLB output relies on, so ask for them when supported.
+    """
+    kwargs: dict = {"resolution": resolution}
+    if "has_vertex_color" in inspect.signature(model.extract_mesh).parameters:
+        kwargs["has_vertex_color"] = True
+    return model.extract_mesh(scene_codes, **kwargs)[0]
+
+
 class TripoSREngine(Engine):
     name = "triposr"
 
@@ -91,7 +104,7 @@ class TripoSREngine(Engine):
         resolution = settings.QUALITY_RESOLUTIONS.get(params.quality, settings.DEFAULT_MC_RESOLUTION)
         with torch.no_grad():
             scene_codes = self._model([processed], device=self._device)
-            return self._model.extract_mesh(scene_codes, resolution=resolution)[0]
+            return _extract_mesh(self._model, scene_codes, resolution)
 
 
 class Hunyuan3DMiniEngine(Engine):
