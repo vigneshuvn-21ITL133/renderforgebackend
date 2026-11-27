@@ -52,23 +52,34 @@ class InferenceClient:
         output_format: OutputFormat,
     ) -> MeshPayload:
         """Run the full inference round trip: submit, download the mesh, then free scratch space."""
-        async with self._client() as client:
-            submitted = await client.post(
-                "/infer",
-                files={"image": (filename, image, content_type)},
-                data={"quality": quality, "output_format": output_format},
-            )
-            _raise_for_status(submitted, "submit image")
-            job = submitted.json()
+        try:
+            async with self._client() as client:
+                submitted = await client.post(
+                    "/infer",
+                    files={"image": (filename, image, content_type)},
+                    data={"quality": quality, "output_format": output_format},
+                )
+                _raise_for_status(submitted, "submit image")
+                job = submitted.json()
 
-            downloaded = await client.get(f"/download/{job['job_id']}")
-            _raise_for_status(downloaded, "download mesh")
+                downloaded = await client.get(f"/download/{job['job_id']}")
+                _raise_for_status(downloaded, "download mesh")
 
-            try:
-                await client.delete(f"/jobs/{job['job_id']}")
-            except httpx.HTTPError:
-                # Scratch cleanup is best effort. The mesh is already in hand.
-                logger.warning("Could not delete inference job %s", job["job_id"])
+                try:
+                    await client.delete(f"/jobs/{job['job_id']}")
+                except httpx.HTTPError:
+                    # Scratch cleanup is best effort. The mesh is already in hand.
+                    logger.warning("Could not delete inference job %s", job["job_id"])
+        except httpx.ConnectError as exc:
+            raise InferenceError(
+                f"The 3D engine is not reachable at {self._base_url}. Start the GPU service and try again."
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise InferenceError("The 3D engine took too long to respond. Try Fast quality or a smaller image.") from exc
+        except httpx.HTTPError as exc:
+            raise InferenceError(f"Lost the connection to the 3D engine ({type(exc).__name__}).") from exc
+        except (KeyError, ValueError) as exc:
+            raise InferenceError("The 3D engine returned an unexpected response.") from exc
 
         return MeshPayload(
             mesh=downloaded.content,
